@@ -524,7 +524,7 @@
       if (r.type === 'entry') {
         result.innerHTML = entryCard(r.entry, { related: r.related, edit: true });
       } else if (r.type === 'ai') {
-        result.innerHTML = '<article class="card answer"><span class="answer__badge answer__badge--ai">' + ICON.spark + 'KI-Antwort · noch nicht vom Chef geprüft</span>' +
+        result.innerHTML = '<article class="card answer"><span class="answer__badge answer__badge--ai">' + ICON.spark + (r.demo ? 'Demo-KI-Antwort · vorbereitet, nicht vom Chef geprüft' : 'KI-Antwort · noch nicht vom Chef geprüft') + '</span>' +
           '<p class="answer__q">Deine Frage: <strong>' + esc(q) + '</strong></p>' +
           '<div class="prose">' + md(r.answer) + '</div>' +
           '<p class="alert alert--info" style="margin-top:20px">Deine Frage ist beim Chef gelandet. Sobald er sie beantwortet hat, findest du seine Antwort unter <a href="#/meine-fragen">Meine Fragen</a>. Im Zweifel immer den Meister fragen.</p>' +
@@ -533,6 +533,7 @@
       } else {
         var why = {
           ki_nicht_eingerichtet: 'Die KI ist noch nicht eingerichtet.',
+          ki_demo: 'In dieser Demo antwortet die KI nur auf ausgewählte Fragen – im echten Betrieb beantwortet sie jede Frage.',
           tageslimit: 'Du hast heute schon sehr viele Fragen gestellt – die KI pausiert bis morgen.',
           ki_fehler: 'Die KI ist gerade nicht erreichbar.',
           ki_abgelehnt: 'Die KI kann diese Frage nicht beantworten.'

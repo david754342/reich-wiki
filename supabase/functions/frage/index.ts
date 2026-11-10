@@ -5,6 +5,7 @@
 //    und die Frage landet beim Chef unter "Offene Fragen".
 import Anthropic from "npm:@anthropic-ai/sdk@1.3.0";
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
+import { findDemoAnswer } from "./demo.ts";
 
 const MODEL = "claude-opus-5-5";
 const EFFORT = "low"; // low | medium | high – höher = gründlicher, aber langsamer und teurer
@@ -106,7 +107,19 @@ Deno.serve(async (req) => {
   const { count } = await admin.from("questions").select("id", { count: "exact", head: true })
     .eq("asked_by", user.id).gte("created_at", since);
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
-  if (!apiKey || (count ?? 0) >= MAX_AI_QUESTIONS_PER_DAY) {
+
+  // Demo-Modus: ohne Claude-Schlüssel antwortet eine vorbereitete Demo-KI auf ausgewählte Fragen
+  if (!apiKey) {
+    const demo = findDemoAnswer(question);
+    if (demo) {
+      const id = await storeQuestion(demo);
+      return json({ type: "ai", demo: true, answer: demo, related: candidates.slice(0, 3), question_id: id });
+    }
+    const id = await storeQuestion(null);
+    return json({ type: "none", question_id: id, related: candidates.slice(0, 3), reason: "ki_demo" });
+  }
+
+  if ((count ?? 0) >= MAX_AI_QUESTIONS_PER_DAY) {
     const id = await storeQuestion(null);
     return json({
       type: "none", question_id: id, related: candidates.slice(0, 3),
