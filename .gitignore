@@ -1,0 +1,7 @@
+# Supabase – lokale Arbeitsdateien und Geheimnisse nie hochladen
+supabase/.temp/
+supabase/.branches/
+supabase/.env
+.env
+*.local
+Zugangsdaten*
