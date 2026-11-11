@@ -690,7 +690,7 @@
       if (asked) return;
       if (q.length < 4) { suggest.innerHTML = ''; return; }
       try {
-        var hits = (await api.search(q, 4)).filter(function (h) { return h.score > 0.1; });
+        var hits = (await api.search(q, 4)).filter(function (h) { return (h.relevanz || 0) >= 0.5 || h.score > 0.1; });
         if (asked || input.value.trim() !== q) return;
         suggest.innerHTML = hits.length ? '<div class="suggest"><div class="suggest__head">Direkt im Wiki gefunden</div>' + hits.map(function (h) {
           return '<a href="#/wissen/' + h.id + '"><span>' + esc(h.title) + '</span><small>' + esc(h.category || '') + '</small></a>';
@@ -761,6 +761,7 @@
 
     form.addEventListener('submit', function (e) {
       e.preventDefault();
+      if ($('button[type=submit]', form).disabled) return; // läuft schon – nicht doppelt fragen
       if (rec) rec.stop();
       var q = input.value.trim().replace(/\s+/g, ' ');
       if (q.length < 3) { input.focus(); if (photos.length) toast('Bitte schreib kurz dazu, was du zum Foto wissen möchtest.'); return; }
