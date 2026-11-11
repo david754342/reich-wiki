@@ -21,8 +21,24 @@ Mit einem Klick wird daraus ein Wiki-Eintrag. So wächst das Wiki mit jeder Frag
 | KI | Supabase-Funktion `frage` → Claude API | Modell `claude-opus-5-5` |
 | Zugänge verwalten | Supabase-Funktion `zugaenge` | nur für den Chef |
 
-Rollen: **Chef** (alles pflegen, Offene Fragen, Zugänge) und **Mitarbeiter** (fragen und lesen).
+Rollen: **Chef** (alles pflegen, Offene Fragen, Statistik, Zugänge) und **Mitarbeiter** (fragen und lesen).
 Die Zugriffsregeln liegen in der Datenbank (Row Level Security) – die Webseite allein kann nichts freischalten.
+
+## Weitere Funktionen
+
+- **Eigenes Passwort beim ersten Anmelden:** Neue Zugänge und vom Chef zurückgesetzte Passwörter gelten als
+  Startpasswort. Bis ein eigenes Passwort (mind. 7 Zeichen, nicht das Startpasswort) gesetzt ist, sieht der Zugang
+  nichts außer dem Passwort-Bildschirm – das ist in der Datenbank abgesichert, nicht nur in der Webseite.
+- **„War das hilfreich?“** unter jeder Antwort. Bei „Nein“ kann ein Hinweis mitgeschickt werden. Der Chef sieht
+  die Rückmeldungen in der Statistik – ohne Namen.
+- **Spracheingabe:** Knopf „Sprechen“ im Fragefeld, wenn der Browser das anbietet (Chrome, Edge, Safari).
+  Die Erkennung übernimmt der Dienst des Browsers (Google bzw. Apple). Sonst geht das Mikrofon der Handy-Tastatur.
+- **Fotos zur Frage:** bis zu 3 Fotos (werden auf max. 1600 px verkleinert). Die KI schaut sie sich mit an.
+  Fotos liegen im privaten Speicher `fragen-fotos`; sehen dürfen sie nur der Fragesteller und der Chef.
+  Beim Beantworten kann der Chef einzelne Fotos in den Wiki-Eintrag übernehmen.
+- **Statistik (nur Chef):** Fragen pro Woche, Anteil direkt aus dem Wiki, meistgenutzte Einträge, Themen,
+  Bewertungen. Es wird nur ohne Namen gezählt (Tabelle `ask_log` speichert weder Person noch Fragetext).
+- **Team-Fotos:** Foto und Funktion je Benutzername stehen in `assets/team.js` (Fotos in `assets/team/`).
 
 ## Einrichtung (einmalig)
 
@@ -35,6 +51,7 @@ Die Zugriffsregeln liegen in der Datenbank (Row Level Security) – die Webseite
 3. Datenbank, Regeln und Beispiele anlegen:
    ```bash
    supabase db query --linked -f supabase/migrations/20261110000000_reich_wiki.sql
+   supabase db query --linked -f supabase/migrations/20261111000000_verbesserungen.sql
    supabase db query --linked -f supabase/seed_beispiele.sql
    ```
 4. Funktionen hochladen:

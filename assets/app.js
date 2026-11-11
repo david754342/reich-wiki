@@ -8,6 +8,8 @@
   var CFG = window.REICH_WIKI_CONFIG || {};
   var DOMAIN = CFG.usernameDomain || 'wiki.reich-haustechnik.de';
   var MAX_UPLOAD_MB = 15;
+  var MIN_PASSWORD = 7;
+  var MAX_QUESTION_PHOTOS = 3;
   var app = document.getElementById('app');
 
   /* ============================== Hilfen ============================== */
@@ -41,9 +43,14 @@
       frage_zu_kurz: 'Bitte formuliere deine Frage etwas ausführlicher.',
       benutzername_ungueltig: 'Benutzername: 3–32 Zeichen, nur Kleinbuchstaben, Zahlen, Punkt, Minus oder Unterstrich.',
       benutzername_vergeben: 'Dieser Benutzername ist schon vergeben.',
-      passwort_zu_kurz: 'Das Passwort muss mindestens 10 Zeichen lang sein.',
+      passwort_zu_kurz: 'Das Passwort muss mindestens ' + MIN_PASSWORD + ' Zeichen lang sein.',
+      passwort_zu_lang: 'Das Passwort darf höchstens 72 Zeichen lang sein.',
+      passwort_gleich: 'Bitte wähle ein neues Passwort – nicht das Startpasswort.',
+      passwort_aendern: 'Bitte lege zuerst ein eigenes Passwort fest.',
       letzter_chef: 'Es muss mindestens ein aktiver Chef-Zugang bleiben.',
-      nicht_selbst_sperren: 'Du kannst deinen eigenen Zugang nicht sperren.'
+      nicht_selbst_sperren: 'Du kannst deinen eigenen Zugang nicht sperren.',
+      foto_format: 'Dieses Bild konnte nicht gelesen werden. Bitte ein normales Foto (JPG oder PNG) wählen.',
+      'Failed to fetch':'Keine Verbindung. Bitte prüfe das Internet und versuche es noch einmal.'
     };
     var code = (e && (e.code || e.message)) || '';
     return map[code] || (e && e.message) || 'Da ist etwas schiefgelaufen. Bitte versuche es noch einmal.';
@@ -56,7 +63,12 @@
     upload: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0-4.5 4.5M12 4l4.5 4.5M4 15v3a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     menu: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
     close: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
-    plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>'
+    plus: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>',
+    mic: '<svg viewBox="0 0 24 24" aria-hidden="true"><rect x="9" y="3" width="6" height="11" rx="3" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21m-3.5 0h7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>',
+    camera: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 8.5A2.5 2.5 0 0 1 6.5 6h1.6l1.4-2h5l1.4 2h1.6A2.5 2.5 0 0 1 20 8.5v9a2.5 2.5 0 0 1-2.5 2.5h-11A2.5 2.5 0 0 1 4 17.5z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="13" r="3.5" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>',
+    up: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10.5V20H4.5a1 1 0 0 1-1-1v-7.5a1 1 0 0 1 1-1zM7 10.5l3.6-6.8c.4-.8 1.4-1.1 2.2-.6.7.4 1 1.2.8 2L12.8 9H18a2 2 0 0 1 2 2.3l-1.1 6.9A2.2 2.2 0 0 1 16.7 20H7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+    down: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 13.5V4h2.5a1 1 0 0 1 1 1v7.5a1 1 0 0 1-1 1zM17 13.5l-3.6 6.8c-.4.8-1.4 1.1-2.2.6-.7-.4-1-1.2-.8-2l.8-3.9H6a2 2 0 0 1-2-2.3l1.1-6.9A2.2 2.2 0 0 1 7.3 4H17" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>',
+    eye: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg>'
   };
 
   /* Einfaches, sicheres Markdown: Absätze, Listen, **fett**, *kursiv*, `code`, Links */
@@ -159,6 +171,25 @@
     });
   }
 
+  /* Foto zur Frage: immer als JPEG, längste Seite max. 1600 px (spart Speicher und KI-Kosten) */
+  function photoForQuestion(file) {
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file), img = new Image();
+      img.onload = function () {
+        var max = 1600, w = img.naturalWidth, hh = img.naturalHeight, s = Math.min(1, max / Math.max(w, hh));
+        var c = document.createElement('canvas'); c.width = Math.round(w * s); c.height = Math.round(hh * s);
+        var ctx = c.getContext('2d'); ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height); ctx.drawImage(img, 0, 0, c.width, c.height);
+        URL.revokeObjectURL(url);
+        c.toBlob(function (b) {
+          if (!b) return reject(new Error('foto_format'));
+          resolve(new File([b], 'foto.jpg', { type: 'image/jpeg' }));
+        }, 'image/jpeg', 0.82);
+      };
+      img.onerror = function () { URL.revokeObjectURL(url); reject(new Error('foto_format')); };
+      img.src = url;
+    });
+  }
+
   /* ============================== Daten (Supabase) ============================== */
   function createApi() {
     var sb = window.supabase.createClient(CFG.supabaseUrl, CFG.supabaseAnonKey, {
@@ -186,6 +217,7 @@
       changePassword: async function (pw) { var r = await sb.auth.updateUser({ password: pw }); if (r.error) throw r.error; },
       me: async function (uid) { return unwrap(await sb.from('profiles').select('*').eq('id', uid).maybeSingle()); },
       profiles: async function () { return unwrap(await sb.from('profiles').select('id, username, display_name, role, active')); },
+      /* eigenes Passwort ändern läuft über die Funktion "zugaenge" (hebt die Passwort-Pflicht auf) */
       categories: async function () { return unwrap(await sb.from('categories').select('*').order('sort').order('name')); },
       addCategory: async function (name) { return unwrap(await sb.from('categories').insert({ name: name }).select().single()); },
       search: async function (q, n) { return unwrap(await sb.rpc('search_entries', { q: q, max_results: n || 6 })); },
@@ -212,7 +244,26 @@
         (data || []).forEach(function (d) { if (d.signedUrl) map[d.path] = d.signedUrl; });
         return map;
       },
-      ask: function (q) { return fn('frage', { question: q }); },
+      ask: function (q, photos) { return fn('frage', { question: q, photos: photos || [] }); },
+      changeOwnPassword: function (pw) { return fn('zugaenge', { action: 'change_own_password', password: pw }); },
+      rate: async function (o) {
+        var r = await sb.rpc('bewerten', { p_entry: o.entry_id || null, p_question: o.question_id || null, p_helpful: !!o.helpful, p_comment: o.comment || null });
+        if (r.error) throw r.error;
+      },
+      stats: async function (days) { return unwrap(await sb.rpc('wiki_statistik', { p_days: days })); },
+      uploadQuestionPhoto: async function (file, uid) {
+        var path = uid + '/' + crypto.randomUUID() + '.jpg';
+        unwrap(await sb.storage.from('fragen-fotos').upload(path, file, { contentType: 'image/jpeg', upsert: false }));
+        return path;
+      },
+      removeQuestionPhotos: async function (paths) { if (paths && paths.length) await sb.storage.from('fragen-fotos').remove(paths); },
+      questionPhotoUrls: async function (paths) {
+        if (!paths.length) return {};
+        var data = unwrap(await sb.storage.from('fragen-fotos').createSignedUrls(paths, 3600)), map = {};
+        (data || []).forEach(function (d) { if (d.signedUrl) map[d.path] = d.signedUrl; });
+        return map;
+      },
+      questionPhotoBlob: async function (path) { return unwrap(await sb.storage.from('fragen-fotos').download(path)); },
       myQuestions: async function (uid) { return unwrap(await sb.from('questions').select('*').eq('asked_by', uid).order('created_at', { ascending: false }).limit(100)); },
       question: async function (id) { return unwrap(await sb.from('questions').select('*').eq('id', id).maybeSingle()); },
       questions: async function (status) { return unwrap(await sb.from('questions').select('*').eq('status', status).order('created_at', { ascending: status === 'offen' }).limit(200)); },
@@ -249,7 +300,7 @@
   /* ============================== Grundgerüst ============================== */
   function navItems() {
     var items = [['#/fragen', 'Fragen'], ['#/wissen', 'Wissen'], ['#/meine-fragen', 'Meine Fragen']];
-    if (isChef()) items.push(['sep'], ['#/offene-fragen', 'Offene Fragen'], ['#/pflegen', 'Einträge pflegen'], ['#/zugaenge', 'Zugänge']);
+    if (isChef()) items.push(['sep'], ['#/offene-fragen', 'Offene Fragen'], ['#/pflegen', 'Einträge pflegen'], ['#/statistik', 'Statistik'], ['#/zugaenge', 'Zugänge']);
     return items;
   }
   function renderShell() {
@@ -350,10 +401,67 @@
     }
     S.me = me;
     S.people[me.id] = me;
+    if (me.must_change_password) { renderFirstPassword(); return; }
     await Promise.all([loadCategories(), loadPeople()]);
     renderShell();
     refreshOpenCount();
     route();
+  }
+
+  /* Passwort-Felder mit „Anzeigen“-Knopf (am Handy tippt man sich leicht vertippt) */
+  function pwFieldHtml(name, label, hint) {
+    return '<label class="field"><span class="field__label">' + esc(label) + '</span><span class="pw">' +
+      '<input class="input" type="password" name="' + name + '" autocomplete="new-password" autocapitalize="none" spellcheck="false">' +
+      '<button type="button" class="pw__toggle" data-pw-toggle aria-label="Passwort anzeigen" aria-pressed="false">' + ICON.eye + '</button></span>' +
+      (hint ? '<span class="field__hint">' + esc(hint) + '</span>' : '') + '</label>';
+  }
+  function bindPwToggles(root) {
+    $$('[data-pw-toggle]', root).forEach(function (b) {
+      b.addEventListener('click', function () {
+        var inp = b.parentNode.querySelector('input'), show = inp.type === 'password';
+        inp.type = show ? 'text' : 'password';
+        b.setAttribute('aria-pressed', String(show)); b.setAttribute('aria-label', show ? 'Passwort verbergen' : 'Passwort anzeigen');
+      });
+    });
+  }
+  function checkNewPassword(p1, p2) {
+    if (p1.length < MIN_PASSWORD) return 'Das Passwort muss mindestens ' + MIN_PASSWORD + ' Zeichen lang sein.';
+    if (p1 !== p2) return 'Die beiden Passwörter stimmen nicht überein.';
+    return null;
+  }
+
+  /* Erstes Anmelden: eigenes Passwort festlegen, vorher geht nichts */
+  function renderFirstPassword() {
+    var me = S.me;
+    var first = String(me.display_name || '').trim().split(/\s+/)[0];
+    document.title = 'Eigenes Passwort festlegen – Reich Wiki';
+    app.innerHTML =
+      '<div class="login"><form class="card login__card" novalidate>' +
+      '<img class="login__logo" src="assets/img/reich-logo.png" alt="Reich Haustechnik" width="170" height="49">' +
+      '<div class="welcome">' + avatarHtml(me, 'avatar--lg') + '<div><h1>Willkommen' + (first && !/^(chef|mitarbeiter)/i.test(first) ? ', ' + esc(first) : '') + '!</h1>' +
+      '<p class="login__sub">Bitte lege jetzt dein eigenes Passwort fest. Das Startpasswort gilt danach nicht mehr.</p></div></div>' +
+      pwFieldHtml('p1', 'Neues Passwort', 'Mindestens ' + MIN_PASSWORD + ' Zeichen. Tipp: ein kurzer Satz oder zwei Wörter mit Zahl.') +
+      pwFieldHtml('p2', 'Neues Passwort wiederholen') +
+      '<p class="alert alert--error" data-err hidden style="margin-top:16px"></p>' +
+      '<button class="btn" type="submit">Passwort speichern</button>' +
+      '<p class="login__foot"><button type="button" class="linkbtn" data-logout>Abmelden</button></p></form></div>';
+    var form = $('form', app), err = $('[data-err]', app);
+    bindPwToggles(app);
+    form.p1.focus();
+    $('[data-logout]', app).addEventListener('click', logout);
+    form.addEventListener('submit', async function (e) {
+      e.preventDefault(); err.hidden = true;
+      var problem = checkNewPassword(form.p1.value, form.p2.value);
+      if (problem) { err.textContent = problem; err.hidden = false; return; }
+      var btn = $('button[type=submit]', form); btn.disabled = true; btn.textContent = 'Speichert …';
+      try {
+        await api.changeOwnPassword(form.p1.value);
+        toast('Passwort gespeichert – viel Spaß mit dem Wiki!');
+        await startSession(S.session);
+      } catch (x) {
+        err.textContent = errText(x); err.hidden = false; btn.disabled = false; btn.textContent = 'Passwort speichern';
+      }
+    });
   }
 
   /* ============================== Router ============================== */
@@ -367,6 +475,7 @@
     [/^#\/pflegen\/neu$/, viewEditor, true],
     [/^#\/pflegen\/(\d+)$/, viewEditor, true],
     [/^#\/zugaenge$/, viewUsers, true],
+    [/^#\/statistik$/, viewStats, true],
     [/^#\/konto$/, viewAccount]
   ];
   var renderToken = 0;
@@ -439,7 +548,68 @@
       '<h2 class="answer__title">' + esc(e.title) + '</h2>' + entryMeta(e) +
       '<div class="prose">' + md(e.answer) + '</div>' + filesHtml(e.attachments) +
       (opts.edit && isChef() ? '<div class="item__actions"><a class="btn btn--ghost btn--small" href="#/pflegen/' + e.id + '">Bearbeiten</a></div>' : '') +
+      (opts.feedback ? feedbackHtml('entry', e.id) : '') +
       relatedHtml(opts.related) + '</article>';
+  }
+
+  /* „War das hilfreich?“ – Ja speichert sofort; Nein speichert sofort und bietet ein Hinweisfeld an */
+  function feedbackHtml(kind, id) {
+    if (!id) return '';
+    var fid = 'fb-' + kind + '-' + id;
+    return '<div class="feedback" data-fb-kind="' + kind + '" data-fb-id="' + id + '"><span class="feedback__q">War das hilfreich?</span>' +
+      '<span class="feedback__btns"><button type="button" class="fbtn" data-fb="1" aria-pressed="false">' + ICON.up + 'Ja</button>' +
+      '<button type="button" class="fbtn" data-fb="0" aria-pressed="false">' + ICON.down + 'Nein</button></span>' +
+      '<form class="feedback__more" hidden><label class="field__label" for="' + fid + '">Was hat gefehlt oder stimmt nicht? <span class="muted">(freiwillig)</span></label>' +
+      '<textarea id="' + fid + '" class="input" rows="2" maxlength="500"></textarea>' +
+      '<button class="btn btn--small" type="submit">Hinweis senden</button></form></div>';
+  }
+  function bindFeedback(root) {
+    $$('.feedback', root).forEach(function (box) {
+      var kind = box.getAttribute('data-fb-kind'), id = +box.getAttribute('data-fb-id'), more = $('.feedback__more', box);
+      function thanks(text) { box.innerHTML = '<p class="feedback__thanks">' + ICON.check + esc(text) + '</p>'; }
+      async function send(helpful, comment) {
+        var o = { helpful: helpful, comment: comment || null };
+        o[kind === 'entry' ? 'entry_id' : 'question_id'] = id;
+        await api.rate(o);
+      }
+      $$('[data-fb]', box).forEach(function (b) {
+        b.addEventListener('click', async function () {
+          var yes = b.getAttribute('data-fb') === '1';
+          $$('[data-fb]', box).forEach(function (x) { x.disabled = true; });
+          try {
+            await send(yes, null);
+            if (yes) { thanks('Danke! Schön, dass es geholfen hat.'); return; }
+            $$('[data-fb]', box).forEach(function (x) { x.setAttribute('aria-pressed', String(x === b)); });
+            more.hidden = false; $('textarea', more).focus();
+          } catch (x) { toast(errText(x)); $$('[data-fb]', box).forEach(function (y) { y.disabled = false; }); }
+        });
+      });
+      more.addEventListener('submit', async function (e) {
+        e.preventDefault();
+        var text = $('textarea', more).value.trim(), btn = $('button', more);
+        if (!text) { thanks('Danke für deine Rückmeldung!'); return; }
+        btn.disabled = true;
+        try { await send(false, text); thanks('Danke! Der Chef sieht deinen Hinweis.'); }
+        catch (x) { toast(errText(x)); btn.disabled = false; }
+      });
+    });
+  }
+
+  /* Fotos, die zu einer Frage geschickt wurden (privater Speicher, nur Fragesteller und Chef) */
+  function qPhotosHtml(paths) {
+    if (!paths || !paths.length) return '';
+    return '<div class="qphotos">' + paths.map(function (p, i) {
+      return '<a href="#" class="qphoto" data-qphoto="' + esc(p) + '" target="_blank" rel="noopener"><img alt="Foto ' + (i + 1) + ' zur Frage" data-qthumb="' + esc(p) + '"></a>';
+    }).join('') + '</div>';
+  }
+  async function hydrateQPhotos(root) {
+    var paths = $$('[data-qthumb]', root).map(function (el) { return el.getAttribute('data-qthumb'); });
+    if (!paths.length) return;
+    try {
+      var urls = await api.questionPhotoUrls(paths);
+      $$('[data-qthumb]', root).forEach(function (img) { var u = urls[img.getAttribute('data-qthumb')]; if (u) img.src = u; });
+      $$('[data-qphoto]', root).forEach(function (a) { var u = urls[a.getAttribute('data-qphoto')]; if (u) a.href = u; });
+    } catch (e) { /* Vorschau nicht verfügbar */ }
   }
   function itemHtml(e) {
     return '<a class="item" href="#/wissen/' + e.id + '"><div class="item__top"><h3 class="item__title">' + esc(e.title) + '</h3>' +
@@ -467,8 +637,13 @@
       '<div class="grid-2"><div>' +
       '<section class="card ask"><p class="eyebrow">Reich Wiki</p><h1>' + esc(greeting) + '</h1>' +
       '<p class="ask__sub">Stell deine Frage ganz normal. Steht die Antwort schon im Wiki, bekommst du die Antwort vom Chef. Sonst hilft dir die KI weiter, und der Chef ergänzt das Wiki.</p>' +
-      '<form class="ask__form" novalidate><label class="sr-only" for="ask-q">Deine Frage</label>' +
+      '<form class="ask__form" novalidate><div class="ask__box"><label class="sr-only" for="ask-q">Deine Frage</label>' +
       '<textarea id="ask-q" class="ask__input" rows="1" maxlength="1000" placeholder="z. B. Wie entlüfte ich einen Heizkörper?"></textarea>' +
+      '<div class="ask__tools"><button type="button" class="tool" data-mic hidden title="Frage einsprechen – die Erkennung übernimmt der Browser">' + ICON.mic + '<span>Sprechen</span></button>' +
+      '<label class="tool" data-photo-label title="Bis zu ' + MAX_QUESTION_PHOTOS + ' Fotos – die KI schaut sie sich mit an">' + ICON.camera + '<span>Foto</span>' +
+      '<input type="file" class="sr-only" accept="image/*" multiple data-photo-input></label>' +
+      '<span class="ask__hint" data-tool-hint aria-live="polite"></span></div>' +
+      '<div class="ask__photos" data-photos></div></div>' +
       '<button class="btn" type="submit">' + ICON.send + 'Frage stellen</button></form>' +
       '<div class="chips" aria-label="Beispielfragen">' + chips.map(function (c) { return '<button type="button" class="chip" data-chip>' + esc(c) + '</button>'; }).join('') + '</div>' +
       '<div data-suggest></div></section>' +
@@ -507,35 +682,98 @@
     $$('[data-chip]', main).forEach(function (b) {
       b.addEventListener('click', function () { input.value = b.textContent; autosize(); form.requestSubmit(); });
     });
+    /* Fotos zur Frage (max. 3) */
+    var photos = [];
+    var photoBox = $('[data-photos]', main), photoInput = $('[data-photo-input]', main), photoLabel = $('[data-photo-label]', main), hint = $('[data-tool-hint]', main);
+    function renderPhotos() {
+      photoBox.innerHTML = photos.map(function (p, i) {
+        return '<span class="ask__thumb"><img src="' + p.url + '" alt="Foto ' + (i + 1) + '"><button type="button" data-rm-photo="' + i + '" aria-label="Foto ' + (i + 1) + ' entfernen">×</button></span>';
+      }).join('');
+      photoLabel.hidden = photos.length >= MAX_QUESTION_PHOTOS;
+      $$('[data-rm-photo]', photoBox).forEach(function (b) {
+        b.addEventListener('click', function () { photos.splice(+b.getAttribute('data-rm-photo'), 1); renderPhotos(); });
+      });
+    }
+    photoInput.addEventListener('change', async function () {
+      var list = Array.prototype.slice.call(photoInput.files || []);
+      photoInput.value = '';
+      if (photos.length + list.length > MAX_QUESTION_PHOTOS) toast('Höchstens ' + MAX_QUESTION_PHOTOS + ' Fotos pro Frage.');
+      hint.textContent = list.length ? 'Foto wird vorbereitet …' : '';
+      for (var i = 0; i < list.length && photos.length < MAX_QUESTION_PHOTOS; i++) {
+        try { var f = await photoForQuestion(list[i]); photos.push({ file: f, url: URL.createObjectURL(f) }); }
+        catch (x) { toast(errText(x)); }
+      }
+      hint.textContent = '';
+      renderPhotos();
+    });
+
+    /* Spracheingabe – nur wenn der Browser sie anbietet (sonst bleibt das Tastatur-Mikrofon) */
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition, micBtn = $('[data-mic]', main), rec = null;
+    function micOff() { rec = null; micBtn.classList.remove('is-on'); micBtn.setAttribute('aria-pressed', 'false'); $('span', micBtn).textContent = 'Sprechen'; hint.textContent = ''; }
+    if (SR) {
+      micBtn.hidden = false; micBtn.setAttribute('aria-pressed', 'false');
+      micBtn.addEventListener('click', function () {
+        if (rec) { rec.stop(); return; }
+        try { rec = new SR(); } catch (x) { micOff(); toast('Spracheingabe geht hier leider nicht – nutze das Mikrofon auf der Tastatur.'); return; }
+        var base = input.value.trim() ? input.value.trim() + ' ' : '';
+        rec.lang = 'de-DE'; rec.interimResults = true; rec.continuous = false; rec.maxAlternatives = 1;
+        rec.onresult = function (ev) {
+          var t = ''; for (var i = 0; i < ev.results.length; i++) t += ev.results[i][0].transcript;
+          input.value = (base + t).slice(0, 1000); autosize();
+        };
+        rec.onerror = function (ev) {
+          var m = {
+            'not-allowed': 'Bitte erlaube den Zugriff aufs Mikrofon.',
+            'service-not-allowed': 'Spracheingabe geht hier leider nicht – nutze das Mikrofon auf der Tastatur.',
+            'no-speech': 'Nichts gehört – bitte noch einmal versuchen.',
+            'audio-capture': 'Kein Mikrofon gefunden.',
+            'network': 'Für die Spracheingabe braucht es Internet.'
+          }[ev.error];
+          if (m) toast(m);
+        };
+        rec.onend = function () { micOff(); asked = false; lookup(input.value.trim()); };
+        try {
+          rec.start(); asked = true;
+          micBtn.classList.add('is-on'); micBtn.setAttribute('aria-pressed', 'true'); $('span', micBtn).textContent = 'Stopp'; hint.textContent = 'Ich höre zu …';
+        } catch (x) { micOff(); toast('Spracheingabe geht hier leider nicht – nutze das Mikrofon auf der Tastatur.'); }
+      });
+    }
+
     form.addEventListener('submit', function (e) {
       e.preventDefault();
+      if (rec) rec.stop();
       var q = input.value.trim().replace(/\s+/g, ' ');
-      if (q.length < 3) { input.focus(); return; }
+      if (q.length < 3) { input.focus(); if (photos.length) toast('Bitte schreib kurz dazu, was du zum Foto wissen möchtest.'); return; }
       asked = true;
       suggest.innerHTML = '';
-      runAsk(q, result, $('button[type=submit]', form));
+      var sent = photos.slice(); photos = []; renderPhotos();
+      runAsk(q, result, $('button[type=submit]', form), sent);
     });
     var pre = query().frage;
     if (pre) { input.value = pre; autosize(); form.requestSubmit(); } else { input.focus(); }
   }
 
-  async function runAsk(q, result, btn) {
+  async function runAsk(q, result, btn, photos) {
+    photos = photos || [];
     btn.disabled = true;
-    result.innerHTML = '<div class="card thinking"><span class="spinner" aria-hidden="true"></span><div><strong data-step>Ich suche im Wiki …</strong><div class="muted small">Das dauert meist nur ein paar Sekunden.</div></div></div>';
-    var stepTimer = setTimeout(function () {
-      var s = $('[data-step]', result);
-      if (s) s.textContent = 'Die KI prüft das Wiki und formuliert eine Antwort …';
-    }, 1800);
+    result.innerHTML = '<div class="card thinking"><span class="spinner" aria-hidden="true"></span><div><strong data-step>' + (photos.length ? 'Fotos werden hochgeladen …' : 'Ich suche im Wiki …') + '</strong><div class="muted small">Das dauert meist nur ein paar Sekunden.</div></div></div>';
+    var stepTimer = null, paths = [];
+    function step(text) { var s = $('[data-step]', result); if (s) s.textContent = text; }
+    var localThumbs = photos.length ? '<div class="qphotos">' + photos.map(function (p, i) { return '<span class="qphoto"><img src="' + p.url + '" alt="Foto ' + (i + 1) + ' zu deiner Frage"></span>'; }).join('') + '</div>' : '';
     try {
-      var r = await api.ask(q);
+      for (var i = 0; i < photos.length; i++) paths.push(await api.uploadQuestionPhoto(photos[i].file, S.me.id));
+      if (photos.length) step('Die KI schaut sich die Fotos an …');
+      stepTimer = setTimeout(function () { step(photos.length ? 'Die KI schaut sich die Fotos an und formuliert eine Antwort …' : 'Die KI prüft das Wiki und formuliert eine Antwort …'); }, 1800);
+      var r = await api.ask(q, paths);
       clearTimeout(stepTimer);
       if (r.type === 'entry') {
-        result.innerHTML = entryCard(r.entry, { related: r.related, edit: true });
+        result.innerHTML = entryCard(r.entry, { related: r.related, edit: true, feedback: true });
       } else if (r.type === 'ai') {
         result.innerHTML = '<article class="card answer"><span class="answer__badge answer__badge--ai">' + ICON.spark + (r.demo ? 'Demo-KI-Antwort · vorbereitet, nicht vom Chef geprüft' : 'KI-Antwort · noch nicht vom Chef geprüft') + '</span>' +
-          '<p class="answer__q">Deine Frage: <strong>' + esc(q) + '</strong></p>' +
+          '<p class="answer__q">Deine Frage: <strong>' + esc(q) + '</strong></p>' + localThumbs +
           '<div class="prose">' + md(r.answer) + '</div>' +
           '<p class="alert alert--info" style="margin-top:20px">Deine Frage ist beim Chef gelandet. Sobald er sie beantwortet hat, findest du seine Antwort unter <a href="#/meine-fragen">Meine Fragen</a>. Im Zweifel immer den Meister fragen.</p>' +
+          feedbackHtml('question', r.question_id) +
           relatedHtml(r.related) + '</article>';
         refreshOpenCount();
       } else {
@@ -547,14 +785,17 @@
           ki_abgelehnt: 'Die KI kann diese Frage nicht beantworten.'
         }[r.reason] || '';
         result.innerHTML = '<article class="card answer"><span class="answer__badge answer__badge--ai">Noch keine Antwort</span>' +
-          '<p class="answer__q">Deine Frage: <strong>' + esc(q) + '</strong></p>' +
+          '<p class="answer__q">Deine Frage: <strong>' + esc(q) + '</strong></p>' + localThumbs +
           '<p>Dazu steht noch nichts im Wiki. ' + esc(why) + ' <strong>Deine Frage wurde an den Chef weitergeleitet.</strong> Seine Antwort findest du später unter <a href="#/meine-fragen">Meine Fragen</a>.</p>' +
           relatedHtml(r.related) + '</article>';
         refreshOpenCount();
       }
       hydrateFiles(result);
+      bindFeedback(result);
     } catch (e) {
       clearTimeout(stepTimer);
+      if (paths.length) api.removeQuestionPhotos(paths).catch(function () { /* egal */ });
+      if (e && e.code === 'passwort_aendern' && S.me) { S.me.must_change_password = true; renderFirstPassword(); return; }
       result.innerHTML = '<div class="alert alert--error">' + esc(errText(e)) + '</div>';
     } finally {
       btn.disabled = false;
@@ -599,8 +840,9 @@
     var related = [];
     try { related = (await api.search(e.title + ' ' + e.keywords, 5)).filter(function (x) { return x.id !== e.id; }).slice(0, 3); } catch (x) { /* egal */ }
     if (token !== renderToken) return;
-    main.innerHTML = '<p style="margin:0 0 16px"><a href="#/wissen">← Zurück zum Wiki</a></p>' + entryCard(e, { edit: true, related: related });
+    main.innerHTML = '<p style="margin:0 0 16px"><a href="#/wissen">← Zurück zum Wiki</a></p>' + entryCard(e, { edit: true, related: related, feedback: true });
     hydrateFiles(main);
+    bindFeedback(main);
   }
 
   /* ============================== Ansicht: Meine Fragen ============================== */
@@ -614,11 +856,12 @@
         var st = q.status;
         return '<div class="item"><div class="item__top"><h3 class="item__title">' + esc(q.question) + '</h3>' +
           '<span class="status status--' + st + '">' + (st === 'offen' ? 'Wartet auf den Chef' : st === 'erledigt' ? 'Vom Chef beantwortet' : 'Geschlossen') + '</span></div>' +
-          '<div class="item__meta"><span>Gefragt am ' + fmtDateTime(q.created_at) + '</span></div>' +
+          '<div class="item__meta"><span>Gefragt am ' + fmtDateTime(q.created_at) + '</span></div>' + qPhotosHtml(q.photos) +
           (st === 'erledigt' && q.entry_id ? '<div class="item__actions"><a class="btn btn--small" href="#/wissen/' + q.entry_id + '">Antwort vom Chef ansehen</a></div>' : '') +
           (q.ai_answer && st !== 'erledigt' ? '<details class="ai"><summary>KI-Antwort (noch nicht geprüft) anzeigen</summary><div class="prose">' + md(q.ai_answer) + '</div></details>' : '') +
           '</div>';
       }).join('') : '<div class="empty">Du hast noch keine offenen Fragen. Alles, was du gefragt hast, stand schon im Wiki.</div>') + '</div>';
+    hydrateQPhotos(main);
   }
 
   /* ============================== Ansicht: Offene Fragen (Chef) ============================== */
@@ -637,7 +880,7 @@
       (list.length ? list.map(function (q) {
         return '<div class="item" data-q="' + q.id + '"><div class="item__top"><h3 class="item__title">' + esc(q.question) + '</h3>' +
           '<span class="status status--' + q.status + '">' + (q.status === 'offen' ? 'Offen' : q.status === 'erledigt' ? 'Beantwortet' : 'Verworfen') + '</span></div>' +
-          '<div class="item__meta"><span class="person">' + avatarHtml(S.people[q.asked_by] || null, 'avatar--xs') + esc(personName(q.asked_by)) + '</span><span>' + fmtDateTime(q.created_at) + '</span></div>' +
+          '<div class="item__meta"><span class="person">' + avatarHtml(S.people[q.asked_by] || null, 'avatar--xs') + esc(personName(q.asked_by)) + '</span><span>' + fmtDateTime(q.created_at) + '</span></div>' + qPhotosHtml(q.photos) +
           (q.ai_answer ? '<details class="ai"' + (tab === 'offen' ? ' open' : '') + '><summary>Antwort der KI</summary><div class="prose">' + md(q.ai_answer) + '</div></details>' : '<p class="muted small" style="margin:10px 0 0">Die KI hat keine Antwort geliefert.</p>') +
           '<div class="item__actions">' +
           (q.status === 'offen' ? '<a class="btn btn--small" href="#/pflegen/neu?frage=' + q.id + '">Beantworten &amp; ins Wiki</a><button type="button" class="btn btn--ghost btn--small" data-discard>Verwerfen</button>' : '') +
@@ -645,6 +888,7 @@
           (q.status === 'verworfen' ? '<button type="button" class="btn btn--ghost btn--small" data-reopen>Wieder öffnen</button>' : '') +
           '</div></div>';
       }).join('') : '<div class="empty">' + (tab === 'offen' ? 'Keine offenen Fragen – das Wiki hat auf alles eine Antwort.' : 'Hier ist noch nichts.') + '</div>') + '</div>';
+    hydrateQPhotos(main);
 
     $$('[data-discard]', main).forEach(function (b) {
       b.addEventListener('click', async function () {
@@ -735,6 +979,11 @@
       '<button type="button" data-fmt="ol" title="Nummerierte Liste">1. Schritte</button><button type="button" data-fmt="preview" aria-pressed="false">Vorschau</button></div>' +
       '<textarea class="textarea" name="answer" aria-labelledby="ans-l" maxlength="20000" required>' + esc(entry.answer) + '</textarea>' +
       '<div class="preview prose" data-preview hidden></div><span class="field__hint">Absatz = Leerzeile · Liste = Zeile mit „- “ · Schritte = „1. “ · **fett** mit zwei Sternchen</span></div>' +
+      (fromQuestion && (fromQuestion.photos || []).length ? '<div class="field"><span class="field__label">Fotos aus der Frage</span><div class="qphotos">' +
+        fromQuestion.photos.map(function (p, i) {
+          return '<span class="qpick"><span class="qphoto"><img alt="Foto ' + (i + 1) + ' zur Frage" data-qthumb="' + esc(p) + '"></span>' +
+            '<button type="button" class="btn btn--ghost btn--small" data-take="' + esc(p) + '">Übernehmen</button></span>';
+        }).join('') + '</div><span class="field__hint">Übernommene Fotos sieht danach das ganze Team im Eintrag. Achte auf Kundendaten (Adressen, Gesichter).</span></div>' : '') +
       '<div class="field"><span class="field__label">Fotos &amp; PDFs</span><label class="dropzone" data-drop>' + ICON.upload +
       '<span><strong>Dateien auswählen</strong> oder hierher ziehen<br><span class="muted small">Fotos (JPG, PNG) und PDFs bis ' + MAX_UPLOAD_MB + ' MB – Fotos werden automatisch verkleinert</span></span>' +
       '<input type="file" class="sr-only" multiple accept="image/jpeg,image/png,image/webp,application/pdf"></label><div data-files></div><p class="muted small" data-upl hidden>Wird hochgeladen …</p></div>' +
@@ -776,6 +1025,17 @@
       upl.hidden = true; fileInput.value = '';
     }
     fileInput.addEventListener('change', function () { addFiles(fileInput.files); });
+    hydrateQPhotos(main);
+    $$('[data-take]', main).forEach(function (b, i) {
+      b.addEventListener('click', async function () {
+        b.disabled = true; b.textContent = 'Wird übernommen …';
+        try {
+          var blob = await api.questionPhotoBlob(b.getAttribute('data-take'));
+          await addFiles([new File([blob], 'Foto-zur-Frage-' + (i + 1) + '.jpg', { type: 'image/jpeg' })]);
+          b.textContent = 'Übernommen';
+        } catch (x) { b.disabled = false; b.textContent = 'Übernehmen'; toast(errText(x)); }
+      });
+    });
     ['dragenter', 'dragover'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.add('is-over'); }); });
     ['dragleave', 'drop'].forEach(function (t) { drop.addEventListener(t, function (e) { e.preventDefault(); drop.classList.remove('is-over'); }); });
     drop.addEventListener('drop', function (e) { addFiles(e.dataTransfer && e.dataTransfer.files); });
@@ -866,18 +1126,19 @@
       users.map(function (u) {
         return '<tr data-id="' + u.id + '"><td><strong>' + esc(u.username) + '</strong>' + (u.id === S.me.id ? ' <span class="tag">du</span>' : '') + '</td><td><span class="person">' + avatarHtml(u, 'avatar--sm') + '<span>' + esc(u.display_name) + '<small>' + esc(teamInfo(u).title || '') + '</small></span></span></td>' +
           '<td>' + (u.role === 'chef' ? '<span class="tag tag--chef">Chef</span>' : 'Mitarbeiter') + '</td>' +
-          '<td>' + (u.active ? '<span class="status status--erledigt">Aktiv</span>' : '<span class="status status--verworfen">Gesperrt</span>') + '</td>' +
+          '<td>' + (!u.active ? '<span class="status status--verworfen">Gesperrt</span>' : u.must_change_password ? '<span class="status status--offen" title="Muss beim nächsten Anmelden ein eigenes Passwort wählen">Startpasswort</span>' : '<span class="status status--erledigt">Aktiv</span>') + '</td>' +
           '<td>' + (u.last_sign_in_at ? fmtDateTime(u.last_sign_in_at) : '<span class="muted">noch nie</span>') + '</td>' +
           '<td style="white-space:nowrap"><button type="button" class="btn btn--ghost btn--small" data-edit>Bearbeiten</button><button type="button" class="btn btn--ghost btn--small" data-pw>Passwort</button>' +
           (u.id !== S.me.id ? '<button type="button" class="btn ' + (u.active ? 'btn--danger' : '') + ' btn--small" data-lock>' + (u.active ? 'Sperren' : 'Entsperren') + '</button>' : '') + '</td></tr>';
       }).join('') + '</tbody></table></div>' +
-      '<p class="muted small" style="margin-top:14px">Passwörter werden verschlüsselt gespeichert – niemand kann sie nachsehen. Wer seins vergessen hat, bekommt hier ein neues.</p>';
+      '<p class="muted small" style="margin-top:14px">Passwörter werden verschlüsselt gespeichert – niemand kann sie nachsehen. Wer seins vergessen hat, bekommt hier ein neues. ' +
+      '„Startpasswort“ heißt: Beim nächsten Anmelden wird ein eigenes Passwort festgelegt.</p>';
 
     function byId(id) { return users.filter(function (u) { return u.id === id; })[0]; }
     function rowUser(b) { return byId(b.closest('[data-id]').getAttribute('data-id')); }
     async function showPassword(title, username, pw) {
       await dialog({
-        title: title, html: '<p>Bitte notieren und persönlich weitergeben. Das Passwort wird nur jetzt angezeigt.</p>' +
+        title: title, html: '<p>Bitte notieren und persönlich weitergeben. Das Passwort wird nur jetzt angezeigt. Beim ersten Anmelden wird ein eigenes Passwort festgelegt.</p>' +
           '<p style="margin:14px 0 4px"><strong>Benutzername:</strong> ' + esc(username) + '</p><div class="secret"><span style="flex:1" data-secret>' + esc(pw) + '</span>' +
           '<button type="button" class="btn btn--ghost btn--small" data-copy>Kopieren</button></div>',
         actions: [{ label: 'Fertig', value: true }],
@@ -896,7 +1157,7 @@
         html: '<label class="field"><span class="field__label">Benutzername</span><input class="input" name="u" autocapitalize="none" spellcheck="false" placeholder="z. B. max.muster"></label>' +
           '<label class="field"><span class="field__label">Name</span><input class="input" name="n" placeholder="z. B. Max Muster"></label>' +
           '<label class="field"><span class="field__label">Rolle</span><select class="select" name="r"><option value="mitarbeiter">Mitarbeiter (fragen &amp; lesen)</option><option value="chef">Chef (alles pflegen)</option></select></label>' +
-          '<label class="field"><span class="field__label">Passwort</span><input class="input" name="p" value="' + esc(pw) + '"><span class="field__hint">Vorschlag – du kannst es ändern (mind. 10 Zeichen).</span></label>',
+          '<label class="field"><span class="field__label">Passwort</span><input class="input" name="p" value="' + esc(pw) + '"><span class="field__hint">Startpasswort – du kannst es ändern (mind. ' + MIN_PASSWORD + ' Zeichen). Beim ersten Anmelden wählt die Person ein eigenes.</span></label>',
         actions: [{ label: 'Abbrechen', kind: 'ghost', value: null }, {
           label: 'Anlegen',
           validate: async function (d) {
@@ -956,22 +1217,81 @@
     });
   }
 
+  /* ============================== Ansicht: Statistik (Chef, nur Gesamtzahlen) ============================== */
+  async function viewStats(main, token) {
+    document.title = 'Statistik – Reich Wiki';
+    var days = +(query().tage || 30);
+    if ([7, 30, 90, 365].indexOf(days) < 0) days = 30;
+    var s = await api.stats(days);
+    if (token !== renderToken) return;
+    function pct(a, b) { return b ? Math.round(100 * a / b) + ' %' : '–'; }
+    function n(x) { return Number(x || 0).toLocaleString('de-DE'); }
+    var weeks = s.pro_woche || [], maxW = Math.max.apply(null, weeks.map(function (w) { return (w.wiki || 0) + (w.andere || 0); }).concat([1]));
+    function wkLabel(iso) { var d = new Date(iso + 'T00:00:00'); return d.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' }); }
+    var tiles = [
+      [n(s.fragen), 'Fragen gestellt', 'in den letzten ' + s.tage + ' Tagen'],
+      [pct(s.wiki, s.fragen), 'direkt aus dem Wiki', n(s.wiki) + ' Antworten vom Chef'],
+      [n(s.ki), 'von der KI beantwortet', n(s.keine) + ' ohne Antwort' + (s.mit_fotos ? ' · ' + n(s.mit_fotos) + ' mit Foto' : '')],
+      [n(s.offen), 'offene Fragen', 'warten auf deine Antwort'],
+      [n(s.eintraege), 'Einträge im Wiki', n(s.neue_eintraege) + ' neu im Zeitraum'],
+      [n(s.aktive_nutzer) + ' / ' + n(s.zugaenge), 'haben das Wiki genutzt', 'angemeldet im Zeitraum']
+    ];
+    var votes = (s.hilfreich || 0) + (s.nicht_hilfreich || 0);
+    main.innerHTML = '<div class="page-head"><div><p class="eyebrow">Für den Chef</p><h1>Statistik</h1>' +
+      '<p>Wie das Wiki genutzt wird – nur Gesamtzahlen, ohne Namen.</p></div>' +
+      '<div class="chips" style="margin:0" role="group" aria-label="Zeitraum">' + [[7, '7 Tage'], [30, '30 Tage'], [90, '90 Tage'], [365, '1 Jahr']].map(function (t) {
+        return '<a class="chip" href="#/statistik?tage=' + t[0] + '" aria-pressed="' + (t[0] === days) + '">' + t[1] + '</a>';
+      }).join('') + '</div></div>' +
+      '<div class="kpis">' + tiles.map(function (t) {
+        return '<div class="kpi"><div class="kpi__value">' + esc(t[0]) + '</div><div class="kpi__label">' + esc(t[1]) + '</div><div class="kpi__sub">' + esc(t[2]) + '</div></div>';
+      }).join('') + '</div>' +
+      '<div class="grid-2 stats-grid"><section class="card"><h2 class="stats-h">Fragen pro Woche</h2>' +
+      '<p class="muted small" style="margin:-4px 0 14px">Letzte 8 Wochen · Datum = Wochenbeginn</p>' +
+      '<div class="wchart" role="img" aria-label="Fragen pro Woche, letzte 8 Wochen">' + weeks.map(function (w) {
+        var tot = (w.wiki || 0) + (w.andere || 0), h = tot ? Math.max(4, Math.round(100 * tot / maxW)) : 0;
+        return '<div class="wchart__col" tabindex="0" aria-label="Woche ab ' + wkLabel(w.woche) + ': ' + tot + ' Fragen, davon ' + (w.wiki || 0) + ' direkt aus dem Wiki">' +
+          '<span class="wchart__bar" style="height:' + h + '%"><span class="wchart__tip">' + tot + ' Fragen<br>' + (w.wiki || 0) + ' aus dem Wiki</span></span>' +
+          '<span class="wchart__x">' + wkLabel(w.woche) + '</span></div>';
+      }).join('') + '</div>' +
+      '<details class="stats-table"><summary>Zahlen als Tabelle</summary><table><thead><tr><th>Woche ab</th><th>Fragen</th><th>davon aus dem Wiki</th></tr></thead><tbody>' +
+      weeks.map(function (w) { return '<tr><td>' + wkLabel(w.woche) + '</td><td>' + ((w.wiki || 0) + (w.andere || 0)) + '</td><td>' + (w.wiki || 0) + '</td></tr>'; }).join('') +
+      '</tbody></table></details></section>' +
+      '<section class="card"><h2 class="stats-h">Meistgenutzte Einträge</h2>' +
+      ((s.top_eintraege || []).length ? '<ol class="rank">' + s.top_eintraege.map(function (e) {
+        return '<li><a href="#/wissen/' + e.id + '">' + esc(e.title) + '</a><span class="rank__n">' + n(e.n) + '×</span></li>';
+      }).join('') + '</ol>' : '<p class="muted">Noch keine Daten – sobald das Team fragt, erscheinen hier die meistgenutzten Einträge.</p>') +
+      ((s.kategorien || []).length ? '<h3 class="stats-h3">Häufigste Themen</h3><div class="cat-list">' + s.kategorien.map(function (c) {
+        return '<span class="chip chip--static">' + esc(c.name) + ' · ' + n(c.n) + '</span>';
+      }).join('') + '</div>' : '') + '</section></div>' +
+      '<section class="card" style="margin-top:24px"><h2 class="stats-h">Rückmeldungen aus dem Team</h2>' +
+      (votes ? '<p class="fbsum"><span class="fbsum__item">' + ICON.up + '<strong>' + n(s.hilfreich) + '</strong> hilfreich</span><span class="fbsum__item">' + ICON.down + '<strong>' + n(s.nicht_hilfreich) + '</strong> nicht hilfreich</span>' +
+        '<span class="muted small">' + pct(s.hilfreich, votes) + ' positiv</span></p>' : '<p class="muted">Noch keine Bewertungen. Unter jeder Antwort fragt das Wiki: „War das hilfreich?“</p>') +
+      ((s.verbessern || []).length ? '<h3 class="stats-h3">Diese Einträge solltest du dir ansehen</h3><div class="list">' + s.verbessern.map(function (e) {
+        return '<div class="item"><div class="item__top"><h4 class="item__title">' + esc(e.title) + '</h4><span class="status status--offen">' + n(e.nein) + '× nicht hilfreich</span></div>' +
+          '<div class="item__actions"><a class="btn btn--small" href="#/pflegen/' + e.id + '">Bearbeiten</a><a class="btn btn--ghost btn--small" href="#/wissen/' + e.id + '">Ansehen</a></div></div>';
+      }).join('') + '</div>' : '') +
+      ((s.hinweise || []).length ? '<h3 class="stats-h3">Neueste Hinweise</h3><ul class="hints">' + s.hinweise.map(function (h) {
+        return '<li><p class="hints__text">„' + esc(h.comment) + '“</p><p class="muted small">zu: ' + (h.entry_id ? '<a href="#/wissen/' + h.entry_id + '">' + esc(h.titel) + '</a>' : esc(h.titel)) + ' · ' + fmtDate(h.updated_at) + '</p></li>';
+      }).join('') + '</ul>' : '') + '</section>';
+  }
+
   /* ============================== Ansicht: Konto ============================== */
   function viewAccount(main) {
     document.title = 'Passwort ändern – Reich Wiki';
     main.innerHTML = '<div class="page-head"><div><p class="eyebrow">Mein Zugang</p><h1>Passwort ändern</h1><p>Angemeldet als <strong>' + esc(S.me.username) + '</strong></p></div></div>' +
       '<form class="card" style="max-width:520px" novalidate>' +
-      '<label class="field"><span class="field__label">Neues Passwort</span><input class="input" type="password" name="p1" autocomplete="new-password" minlength="10"><span class="field__hint">Mindestens 10 Zeichen.</span></label>' +
-      '<label class="field"><span class="field__label">Neues Passwort wiederholen</span><input class="input" type="password" name="p2" autocomplete="new-password"></label>' +
+      pwFieldHtml('p1', 'Neues Passwort', 'Mindestens ' + MIN_PASSWORD + ' Zeichen.') +
+      pwFieldHtml('p2', 'Neues Passwort wiederholen') +
       '<p class="alert" data-msg hidden style="margin-top:18px"></p><div class="form-actions"><button class="btn" type="submit">Passwort speichern</button></div></form>';
     var form = $('form', main), msg = $('[data-msg]', main);
+    bindPwToggles(main);
     form.addEventListener('submit', async function (e) {
       e.preventDefault();
       function show(kind, text) { msg.className = 'alert alert--' + kind; msg.textContent = text; msg.hidden = false; }
-      if (form.p1.value.length < 10) return show('error', 'Das Passwort muss mindestens 10 Zeichen lang sein.');
-      if (form.p1.value !== form.p2.value) return show('error', 'Die beiden Passwörter stimmen nicht überein.');
-      var btn = $('button', form); btn.disabled = true;
-      try { await api.changePassword(form.p1.value); form.reset(); show('ok', 'Dein Passwort wurde geändert.'); }
+      var problem = checkNewPassword(form.p1.value, form.p2.value);
+      if (problem) return show('error', problem);
+      var btn = $('button[type=submit]', form); btn.disabled = true;
+      try { await api.changeOwnPassword(form.p1.value); form.reset(); show('ok', 'Dein Passwort wurde geändert.'); }
       catch (x) { show('error', errText(x)); }
       btn.disabled = false;
     });

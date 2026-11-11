@@ -1,9 +1,11 @@
-// Reich Wiki – Funktion "zugaenge": Zugangsverwaltung, nur für den Chef
-// Aktionen: list, create, update (Name/Rolle/aktiv), rename (Benutzername), reset_password
+// Reich Wiki – Funktion "zugaenge": Zugangsverwaltung
+// Für jeden Zugang:  change_own_password (eigenes Passwort ändern, hebt die Passwort-Pflicht auf)
+// Nur für den Chef:  list, create, update (Name/Rolle/aktiv), rename (Benutzername), reset_password
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 
 const USERNAME_DOMAIN = "wiki.reich-haustechnik.de"; // nur intern als Login-Kennung, es werden keine Mails verschickt
 const LOCK_DURATION = "876000h"; // gesperrt = ca. 100 Jahre
+const MIN_PASSWORD = 7;
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -27,12 +29,34 @@ Deno.serve(async (req) => {
   const token = (req.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
   const { data: me } = await admin.auth.getUser(token);
   if (!me?.user) return json({ error: "nicht_angemeldet" }, 401);
-  const { data: myProfile } = await admin.from("profiles").select("id, role, active").eq("id", me.user.id).maybeSingle();
-  if (!myProfile?.active || myProfile.role !== "chef") return json({ error: "nur_chef" }, 403);
+  const { data: myProfile } = await admin.from("profiles").select("id, username, role, active, must_change_password").eq("id", me.user.id).maybeSingle();
+  if (!myProfile?.active) return json({ error: "zugang_gesperrt" }, 403);
 
   let body: Record<string, unknown> = {};
   try { body = await req.json(); } catch { /* leer */ }
   const action = String(body.action ?? "");
+
+  // Eigenes Passwort ändern – für jeden aktiven Zugang, auch solange noch das Startpasswort gilt
+  if (action === "change_own_password") {
+    const password = String(body.password ?? "");
+    if (password.length < MIN_PASSWORD) return json({ error: "passwort_zu_kurz" }, 400);
+    if (password.length > 72) return json({ error: "passwort_zu_lang" }, 400);
+    // Das neue Passwort darf nicht das alte sein (Test-Anmeldung mit dem neuen Passwort)
+    const probe = createClient(Deno.env.get("SUPABASE_URL")!, Deno.env.get("SUPABASE_ANON_KEY")!, { auth: { persistSession: false } });
+    const { data: same } = await probe.auth.signInWithPassword({ email: me.user.email!, password });
+    if (same?.session) {
+      await admin.auth.admin.signOut(same.session.access_token, "local"); // nur diese Test-Sitzung beenden
+      return json({ error: "passwort_gleich" }, 400);
+    }
+    const { error } = await admin.auth.admin.updateUserById(me.user.id, { password });
+    if (error) return json({ error: "passwort_fehlgeschlagen", detail: error.message }, 400);
+    const { error: pErr } = await admin.from("profiles").update({ must_change_password: false }).eq("id", me.user.id);
+    if (pErr) { console.error("zugaenge flag", pErr); return json({ error: "serverfehler" }, 500); }
+    return json({ ok: true });
+  }
+
+  if (myProfile.role !== "chef") return json({ error: "nur_chef" }, 403);
+  if (myProfile.must_change_password) return json({ error: "passwort_aendern" }, 403);
 
   const otherActiveChefs = async (excludeId: string) => {
     const { count } = await admin.from("profiles").select("id", { count: "exact", head: true })
@@ -55,7 +79,7 @@ Deno.serve(async (req) => {
       const role = body.role === "chef" ? "chef" : "mitarbeiter";
       const password = String(body.password ?? "");
       if (!USERNAME_RE.test(username)) return json({ error: "benutzername_ungueltig" }, 400);
-      if (password.length < 10) return json({ error: "passwort_zu_kurz" }, 400);
+      if (password.length < MIN_PASSWORD) return json({ error: "passwort_zu_kurz" }, 400);
       const { data: exists } = await admin.from("profiles").select("id").eq("username", username).maybeSingle();
       if (exists) return json({ error: "benutzername_vergeben" }, 409);
       const { data: created, error } = await admin.auth.admin.createUser({
@@ -63,7 +87,7 @@ Deno.serve(async (req) => {
         user_metadata: { username, display_name },
       });
       if (error || !created?.user) return json({ error: "anlegen_fehlgeschlagen", detail: error?.message }, 400);
-      const { error: pErr } = await admin.from("profiles").insert({ id: created.user.id, username, display_name, role });
+      const { error: pErr } = await admin.from("profiles").insert({ id: created.user.id, username, display_name, role, must_change_password: true });
       if (pErr) {
         await admin.auth.admin.deleteUser(created.user.id);
         throw pErr;
@@ -108,9 +132,11 @@ Deno.serve(async (req) => {
 
     if (action === "reset_password") {
       const password = String(body.password ?? "");
-      if (password.length < 10) return json({ error: "passwort_zu_kurz" }, 400);
+      if (password.length < MIN_PASSWORD) return json({ error: "passwort_zu_kurz" }, 400);
       const { error } = await admin.auth.admin.updateUserById(id, { password });
       if (error) return json({ error: "passwort_fehlgeschlagen", detail: error.message }, 400);
+      // Neues Passwort vom Chef = Startpasswort → beim nächsten Anmelden ein eigenes wählen
+      await admin.from("profiles").update({ must_change_password: true }).eq("id", id);
       return json({ ok: true });
     }
 
