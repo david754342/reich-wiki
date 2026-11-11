@@ -230,6 +230,14 @@
   var S = { session: null, me: null, people: {}, categories: [], openCount: 0 };
   function isChef() { return S.me && S.me.role === 'chef'; }
   function catName(id) { var c = S.categories.filter(function (x) { return x.id === id; })[0]; return c ? c.name : 'Ohne Kategorie'; }
+  /* Foto und Funktion aus assets/team.js (nach Benutzername); ohne Foto: Initialen */
+  function teamInfo(p) { var t = window.REICH_TEAM || {}; return (p && t[p.username]) || {}; }
+  function avatarHtml(p, cls) {
+    var t = teamInfo(p), c = 'avatar' + (cls ? ' ' + cls : '');
+    if (t.photo) return '<span class="' + c + ' avatar--photo" aria-hidden="true"><img src="' + esc(t.photo) + '" alt="" width="96" height="96"></span>';
+    return '<span class="' + c + '" aria-hidden="true">' + esc(initials(p && p.display_name)) + '</span>';
+  }
+  function roleLabel(p) { return teamInfo(p).title || (p && p.role === 'chef' ? 'Chef' : 'Mitarbeiter'); }
   function personName(id) { var p = S.people[id]; return p ? p.display_name : 'Ehemaliger Zugang'; }
   async function loadPeople() { try { (await api.profiles()).forEach(function (p) { S.people[p.id] = p; }); } catch (e) { /* optional */ } }
   async function loadCategories() { S.categories = await api.categories(); }
@@ -257,8 +265,8 @@
       '<a class="nav__mobile-only" href="#/konto" data-nav="#/konto">Passwort ändern</a>' +
       '<a class="nav__mobile-only" href="#/abmelden">Abmelden (' + esc(me.display_name) + ')</a></nav>' +
       '<div class="usermenu"><button type="button" class="usermenu__btn" aria-expanded="false" aria-haspopup="true">' +
-      '<span class="avatar" aria-hidden="true">' + esc(initials(me.display_name)) + '</span><span class="usermenu__name">' + esc(me.display_name) +
-      '<small>' + (isChef() ? 'Chef' : 'Mitarbeiter') + '</small></span></button>' +
+      avatarHtml(me) + '<span class="usermenu__name">' + esc(me.display_name) +
+      '<small>' + esc(roleLabel(me)) + '</small></span></button>' +
       '<div class="usermenu__panel" hidden><a href="#/konto">Passwort ändern</a><button type="button" data-logout>Abmelden</button></div></div>' +
       '<button type="button" class="menu-toggle" aria-label="Menü öffnen" aria-expanded="false">' + ICON.menu + '</button>' +
       '</div></header><main class="main" id="main" tabindex="-1"></main>';
@@ -629,7 +637,7 @@
       (list.length ? list.map(function (q) {
         return '<div class="item" data-q="' + q.id + '"><div class="item__top"><h3 class="item__title">' + esc(q.question) + '</h3>' +
           '<span class="status status--' + q.status + '">' + (q.status === 'offen' ? 'Offen' : q.status === 'erledigt' ? 'Beantwortet' : 'Verworfen') + '</span></div>' +
-          '<div class="item__meta"><span>' + esc(personName(q.asked_by)) + '</span><span>' + fmtDateTime(q.created_at) + '</span></div>' +
+          '<div class="item__meta"><span class="person">' + avatarHtml(S.people[q.asked_by] || null, 'avatar--xs') + esc(personName(q.asked_by)) + '</span><span>' + fmtDateTime(q.created_at) + '</span></div>' +
           (q.ai_answer ? '<details class="ai"' + (tab === 'offen' ? ' open' : '') + '><summary>Antwort der KI</summary><div class="prose">' + md(q.ai_answer) + '</div></details>' : '<p class="muted small" style="margin:10px 0 0">Die KI hat keine Antwort geliefert.</p>') +
           '<div class="item__actions">' +
           (q.status === 'offen' ? '<a class="btn btn--small" href="#/pflegen/neu?frage=' + q.id + '">Beantworten &amp; ins Wiki</a><button type="button" class="btn btn--ghost btn--small" data-discard>Verwerfen</button>' : '') +
@@ -856,7 +864,7 @@
       '<button type="button" class="btn" data-new>' + ICON.plus + 'Neuer Zugang</button></div>' +
       '<div class="table-wrap"><table><thead><tr><th>Benutzername</th><th>Name</th><th>Rolle</th><th>Status</th><th>Letzte Anmeldung</th><th><span class="sr-only">Aktionen</span></th></tr></thead><tbody>' +
       users.map(function (u) {
-        return '<tr data-id="' + u.id + '"><td><strong>' + esc(u.username) + '</strong>' + (u.id === S.me.id ? ' <span class="tag">du</span>' : '') + '</td><td>' + esc(u.display_name) + '</td>' +
+        return '<tr data-id="' + u.id + '"><td><strong>' + esc(u.username) + '</strong>' + (u.id === S.me.id ? ' <span class="tag">du</span>' : '') + '</td><td><span class="person">' + avatarHtml(u, 'avatar--sm') + '<span>' + esc(u.display_name) + '<small>' + esc(teamInfo(u).title || '') + '</small></span></span></td>' +
           '<td>' + (u.role === 'chef' ? '<span class="tag tag--chef">Chef</span>' : 'Mitarbeiter') + '</td>' +
           '<td>' + (u.active ? '<span class="status status--erledigt">Aktiv</span>' : '<span class="status status--verworfen">Gesperrt</span>') + '</td>' +
           '<td>' + (u.last_sign_in_at ? fmtDateTime(u.last_sign_in_at) : '<span class="muted">noch nie</span>') + '</td>' +
