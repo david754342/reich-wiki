@@ -1,17 +1,22 @@
 // Reich Wiki – Funktion "frage"
+// Grundsatz: Die Antwort vom Chef kommt immer zuerst. Die KI ergänzt nur – oder antwortet, wenn es keine Chef-Antwort gibt.
 // 1. sucht passende Einträge im Wiki
-// 2. eindeutiger Treffer  -> Antwort des Chefs (ohne KI)
-// 3. sonst fragt Claude: passt doch ein Eintrag? Wenn nein, antwortet Claude selbst
-//    und die Frage landet beim Chef unter "Offene Fragen".
-// Fotos zur Frage (max. 3) schaut sich Claude mit an. Jede Frage wird ohne Namen protokolliert (Statistik).
+// 2. (fast) dieselbe Frage wie ein Eintrag  -> Antwort des Chefs, ohne KI
+// 3. sonst prüft Claude die Einträge (und Fotos):
+//    - passt ein Eintrag  -> Antwort des Chefs + ggf. kurze Ergänzung der KI darunter
+//    - passt keiner       -> KI-Antwort; die Frage landet beim Chef unter "Offene Fragen"
+// Ohne KI (Demo, Tageslimit, Störung) entscheidet der Suchwert, ob ein Eintrag passt.
+// Jede Frage wird ohne Namen protokolliert (Statistik).
 import Anthropic from "npm:@anthropic-ai/sdk@1.3.0";
 import { createClient } from "npm:@supabase/supabase-js@2.118.0";
 import { findDemoAnswer } from "./demo.ts";
 
 const MODEL = "claude-opus-5-5";
 const EFFORT = "low"; // low | medium | high – höher = gründlicher, aber langsamer und teurer
-const DIRECT_MATCH_SIMILARITY = 0.6; // Titel-Ähnlichkeit, ab der ohne KI geantwortet wird
-const MAX_AI_QUESTIONS_PER_DAY = 40; // Kostenbremse pro Person
+const EXACT_MATCH_SIMILARITY = 0.85; // so gut wie dieselbe Frage wie der Titel -> Chef-Antwort ohne KI
+const LIKELY_MATCH_SCORE = 1.0;      // ohne KI: ab diesem Suchwert gilt der beste Eintrag als passend
+const LIKELY_MATCH_SIMILARITY = 0.6; // ohne KI: oder ab dieser Titel-Ähnlichkeit
+const MAX_AI_CALLS_PER_DAY = 40;     // Kostenbremse pro Person (alle KI-Aufrufe, auch Ergänzungen)
 const MAX_PHOTOS = 3;
 const PHOTO_BUCKET = "fragen-fotos";
 
@@ -27,27 +32,31 @@ function json(body: unknown, status = 200) {
 
 const SYSTEM = `Du bist der interne Wissens-Assistent der Reich Haustechnik GmbH in Bad Krozingen, einem Meisterbetrieb für Bad, Sanitär, Heizung, Wärmepumpen und Klimaanlagen. Mitarbeiter und Auszubildende stellen dir Fragen aus ihrem Arbeitsalltag.
 
-Du bekommst Einträge aus dem internen Wiki, die der Chef selbst gepflegt hat, und die Frage eines Mitarbeiters – manchmal mit Fotos von der Baustelle.
+Du bekommst Einträge aus dem internen Wiki, die der Chef selbst gepflegt hat, und die Frage eines Mitarbeiters – manchmal mit Fotos von der Baustelle. Die Antwort des Chefs hat immer Vorrang; du ergänzt nur.
 
 So entscheidest du:
-1. Beantwortet einer der Wiki-Einträge die Frage inhaltlich (dieselbe Frage, auch wenn sie anders formuliert ist)? Dann setze "match_id" auf die ID dieses Eintrags und "answer" auf einen leeren Text. Wähle nur dann einen Eintrag, wenn er die Frage wirklich beantwortet – ein nur verwandtes Thema reicht nicht. Sind Fotos dabei, wähle nur dann einen Eintrag, wenn er auch zu dem passt, was auf den Fotos zu sehen ist.
+1. Beantwortet einer der Wiki-Einträge die Frage im Kern (dieselbe Frage oder dasselbe Problem, auch wenn es anders formuliert ist)? Dann setze "match_id" auf die ID dieses Eintrags. Ein nur entfernt verwandtes Thema reicht nicht.
+   - "answer" ist dann eine KURZE Ergänzung zur Antwort des Chefs – nur das, was der Eintrag nicht abdeckt: z. B. was auf den Fotos zu sehen ist und was das für die Antwort bedeutet, oder ein wichtiger Sicherheitshinweis zur konkreten Situation. 1 bis 4 Sätze oder Stichpunkte.
+   - Wiederhole nicht, was schon im Eintrag steht, und widersprich dem Eintrag nie.
+   - Deckt der Eintrag die Frage vollständig ab, lass "answer" leer.
 2. Passt kein Eintrag, setze "match_id" auf 0 und beantworte die Frage selbst in "answer":
    - auf Deutsch, in der Du-Form, praxisnah und verständlich für Monteure und Azubis
    - kurz und strukturiert: ein Satz zur Einordnung, dann Schritte oder Stichpunkte
    - mit Sicherheitshinweisen, wo es darauf ankommt (Gas, Strom, Druck, Abgas, Trinkwasserhygiene, Kältemittel, Absturz, Asbest)
    - Weise darauf hin, wenn eine Arbeit nur Fachkräfte mit Zertifikat oder der Meister machen dürfen.
    - Wiki-Einträge zum Thema haben Vorrang vor allgemeinem Wissen; widersprich ihnen nicht.
+3. Für beide Fälle gilt:
    - Firmenspezifisches (Preise, Zuständigkeiten, Kunden, interne Abläufe, Telefonnummern) erfindest du nicht. Sag stattdessen, dass das der Chef beantworten muss.
-   - Fotos: Beschreibe kurz, was du erkennst, wenn es für die Antwort wichtig ist. Ist auf dem Foto etwas nicht sicher zu erkennen (Typenschild unleserlich, Bauteil verdeckt), sag das offen und nenne, was man prüfen oder fotografieren sollte. Rate keine Gerätetypen oder Messwerte.
+   - Fotos: Beschreibe kurz, was du erkennst, wenn es für die Antwort wichtig ist. Ist etwas nicht sicher zu erkennen (Typenschild unleserlich, Bauteil verdeckt), sag das offen und nenne, was man prüfen oder fotografieren sollte. Rate keine Gerätetypen oder Messwerte.
    - Wenn du unsicher bist, sag das offen.
    - Formatierung: einfache Absätze, Listen mit "-" oder "1.", **fett** für Wichtiges. Keine Überschriften, keine Tabellen.
-3. "related_ids": bis zu 3 IDs von Wiki-Einträgen, die zum Thema hilfreich sind (sonst leer).`;
+4. "related_ids": bis zu 3 weitere IDs von Wiki-Einträgen, die zum Thema hilfreich sind (sonst leer).`;
 
 const OUTPUT_SCHEMA = {
   type: "object",
   properties: {
     match_id: { type: "integer", description: "ID des passenden Wiki-Eintrags oder 0" },
-    answer: { type: "string", description: "Eigene Antwort, leer wenn match_id gesetzt ist" },
+    answer: { type: "string", description: "Bei Treffer: kurze Ergänzung zur Chef-Antwort oder leer. Ohne Treffer: eigene Antwort." },
     related_ids: { type: "array", items: { type: "integer" } },
   },
   required: ["match_id", "answer", "related_ids"],
@@ -104,20 +113,6 @@ Deno.serve(async (req) => {
     });
     if (error) console.error("ask_log", error);
   };
-
-  // 1) Suche im Wiki
-  const { data: found, error: searchError } = await admin.rpc("search_entries", { q: question, max_results: 8 });
-  if (searchError) console.error("search_entries", searchError);
-  const candidates: Entry[] = (found as Entry[]) ?? [];
-  const byId = new Map(candidates.map((e) => [e.id, e]));
-
-  // 2) Eindeutiger Treffer -> direkt die Antwort des Chefs (nur ohne Fotos – mit Fotos schaut die KI mit)
-  const top = candidates[0];
-  if (!hasPhotos && top && (top.title_sim >= DIRECT_MATCH_SIMILARITY || norm(top.title) === norm(question))) {
-    await log("wiki", top);
-    return json({ type: "entry", entry: top, related: candidates.slice(1, 4), via: "suche" });
-  }
-
   const storeQuestion = async (aiAnswer: string | null) => {
     const { data, error } = await admin.from("questions")
       .insert({ question, asked_by: user.id, ai_answer: aiAnswer, photos: photoPaths }).select("id").single();
@@ -125,15 +120,36 @@ Deno.serve(async (req) => {
     return data?.id ?? null;
   };
 
-  // Kostenbremse
-  const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
-  const { count } = await admin.from("questions").select("id", { count: "exact", head: true })
-    .eq("asked_by", user.id).gte("created_at", since);
+  // 1) Suche im Wiki
+  const { data: found, error: searchError } = await admin.rpc("search_entries", { q: question, max_results: 8 });
+  if (searchError) console.error("search_entries", searchError);
+  const candidates: Entry[] = (found as Entry[]) ?? [];
+  const byId = new Map(candidates.map((e) => [e.id, e]));
+  const top = candidates[0];
+  const sameTitle = !!top && norm(top.title) === norm(question);
+  const exact = top && !hasPhotos && (sameTitle || top.title_sim >= EXACT_MATCH_SIMILARITY) ? top : null;
+  const likely = top && (sameTitle || top.score >= LIKELY_MATCH_SCORE || top.title_sim >= LIKELY_MATCH_SIMILARITY) ? top : null;
+  const others = (e: Entry) => candidates.filter((c) => c.id !== e.id).slice(0, 3);
+
+  // Antwort des Chefs (+ ggf. Ergänzung der KI). Die Frage ist damit beantwortet – Fotos werden nicht mehr gebraucht.
+  const chefAnswer = async (entry: Entry, related: Entry[], via: string, supplement: string | null,
+                            opts: { demo?: boolean; note?: string } = {}) => {
+    await log("wiki", entry);
+    if (hasPhotos) await admin.storage.from(PHOTO_BUCKET).remove(photoPaths);
+    return json({ type: "entry", entry, related, via, supplement: supplement || null, supplement_demo: !!opts.demo, note: opts.note ?? null });
+  };
+
+  // 2) (Fast) dieselbe Frage -> direkt die Antwort des Chefs
+  if (exact) return chefAnswer(exact, others(exact), "suche", null);
+
   const apiKey = Deno.env.get("ANTHROPIC_API_KEY");
 
-  // Demo-Modus: ohne Claude-Schlüssel antwortet eine vorbereitete Demo-KI auf ausgewählte Fragen
+  // Demo-Modus (ohne Claude-Schlüssel): Chef-Antwort nach Suchwert, vorbereitete Demo-KI als Ergänzung bzw. Antwort
   if (!apiKey) {
     const demo = findDemoAnswer(question);
+    if (likely) {
+      return chefAnswer(likely, others(likely), "suche", demo, { demo: !!demo, note: hasPhotos ? "fotos_demo" : demo ? undefined : "ki_demo" });
+    }
     if (demo) {
       const id = await storeQuestion(demo);
       await log("ki", null, id);
@@ -144,11 +160,18 @@ Deno.serve(async (req) => {
     return json({ type: "none", question_id: id, related: candidates.slice(0, 3), reason: "ki_demo" });
   }
 
-  if ((count ?? 0) >= MAX_AI_QUESTIONS_PER_DAY) {
+  // Kostenbremse: zählt alle KI-Aufrufe der letzten 24 Stunden
+  const since = new Date(Date.now() - 24 * 3600 * 1000).toISOString();
+  const { count: used } = await admin.from("ki_nutzung").select("id", { count: "exact", head: true })
+    .eq("user_id", user.id).gte("created_at", since);
+  if ((used ?? 0) >= MAX_AI_CALLS_PER_DAY) {
+    if (likely) return chefAnswer(likely, others(likely), "suche", null, { note: "tageslimit" });
     const id = await storeQuestion(null);
     await log("keine", null, id);
     return json({ type: "none", question_id: id, related: candidates.slice(0, 3), reason: "tageslimit" });
   }
+  await admin.from("ki_nutzung").insert({ user_id: user.id });
+  await admin.from("ki_nutzung").delete().lt("created_at", new Date(Date.now() - 2 * 24 * 3600 * 1000).toISOString());
 
   // Fotos laden (aus dem privaten Speicher)
   const images: { type: "image"; source: { type: "base64"; media_type: string; data: string } }[] = [];
@@ -181,6 +204,7 @@ Deno.serve(async (req) => {
     } as any);
 
     if (msg.stop_reason === "refusal") {
+      if (likely) return chefAnswer(likely, others(likely), "suche", null);
       const id = await storeQuestion(null);
       await log("keine", null, id);
       return json({ type: "none", question_id: id, related: candidates.slice(0, 3), reason: "ki_abgelehnt" });
@@ -190,12 +214,9 @@ Deno.serve(async (req) => {
 
     const match = out.match_id ? byId.get(out.match_id) : undefined;
     const related = (out.related_ids || []).map((id) => byId.get(id)).filter((e): e is Entry => !!e && e.id !== match?.id).slice(0, 3);
-    if (match) {
-      await log("wiki", match);
-      if (hasPhotos) await admin.storage.from(PHOTO_BUCKET).remove(photoPaths); // Fotos werden nicht mehr gebraucht
-      return json({ type: "entry", entry: match, related, via: "ki" });
-    }
     const answer = (out.answer || "").trim();
+    if (match) return chefAnswer(match, related, "ki", answer || null);
+
     const id = await storeQuestion(answer || null);
     await log(answer ? "ki" : "keine", null, id);
     if (!answer) return json({ type: "none", question_id: id, related, reason: "keine_antwort" });
@@ -205,6 +226,8 @@ Deno.serve(async (req) => {
     else if (err instanceof Anthropic.AuthenticationError) console.error("Claude: API-Schlüssel ungültig");
     else if (err instanceof Anthropic.APIError) console.error("Claude API", err.status, err.message);
     else console.error("frage", err);
+    // Ohne KI trotzdem die Chef-Antwort zeigen, wenn die Suche eine gute gefunden hat
+    if (likely) return chefAnswer(likely, others(likely), "suche", null, { note: "ki_fehler" });
     const id = await storeQuestion(null);
     await log("keine", null, id);
     return json({ type: "none", question_id: id, related: candidates.slice(0, 3), reason: "ki_fehler" });

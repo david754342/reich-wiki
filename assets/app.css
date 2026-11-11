@@ -271,6 +271,12 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .answer__meta { margin: 0 0 18px; font-size: 13px; color: var(--muted); }
 .answer__q { margin: 16px 0 18px; font-size: 15px; color: var(--muted); }
 .answer__q strong { color: var(--navy); font-weight: 500; }
+.answer__q--tight { margin-bottom: 0; }
+.answer--extra { margin-top: 16px; background: #FFFDF8; border-color: #F0E2C4; }
+.answer__extra-text { margin-top: 14px; }
+.answer__extra-foot { margin: 14px 0 0; }
+.answer-note { display: flex; align-items: flex-start; gap: 8px; margin: 14px 6px 0; font-size: 13.5px; line-height: 1.5; color: var(--muted); }
+.answer-note svg { width: 16px; height: 16px; flex: none; margin-top: 2px; color: var(--warn-line); }
 .tag { display: inline-block; padding: 2px 9px; border-radius: 20px; background: var(--bar); color: var(--muted); font-size: 12px; font-weight: 500; vertical-align: 2px; }
 .tag--example { background: #FFF3D6; color: #7A4B05; }
 .tag--chef { background: var(--blue); color: #fff; }

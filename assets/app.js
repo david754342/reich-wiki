@@ -541,15 +541,35 @@
       return '<a href="#/wissen/' + e.id + '">' + esc(e.title) + '</a>';
     }).join('') + '</div>';
   }
+  function plainText(s) { return String(s || '').toLowerCase().replace(/[^a-z0-9äöüß]+/g, ' ').trim(); }
   function entryCard(e, opts) {
     opts = opts || {};
+    var askedOther = opts.question && plainText(opts.question) !== plainText(e.title);
     return '<article class="card answer">' +
       '<span class="answer__badge answer__badge--chef">' + ICON.check + 'Antwort vom Chef</span>' +
+      (askedOther ? '<p class="answer__q answer__q--tight">Deine Frage: <strong>' + esc(opts.question) + '</strong></p>' : '') +
       '<h2 class="answer__title">' + esc(e.title) + '</h2>' + entryMeta(e) +
       '<div class="prose">' + md(e.answer) + '</div>' + filesHtml(e.attachments) +
       (opts.edit && isChef() ? '<div class="item__actions"><a class="btn btn--ghost btn--small" href="#/pflegen/' + e.id + '">Bearbeiten</a></div>' : '') +
       (opts.feedback ? feedbackHtml('entry', e.id) : '') +
       relatedHtml(opts.related) + '</article>';
+  }
+
+  /* Ergänzung der KI unter der Chef-Antwort (nur wenn sie etwas hinzuzufügen hat) */
+  function supplementHtml(r, thumbs) {
+    if (r.supplement) {
+      return '<article class="card answer answer--extra"><span class="answer__badge answer__badge--ai">' + ICON.spark +
+        (r.supplement_demo ? 'Ergänzung der Demo-KI · nicht vom Chef geprüft' : 'Ergänzung der KI · nicht vom Chef geprüft') + '</span>' +
+        (thumbs || '') + '<div class="prose answer__extra-text">' + md(r.supplement) + '</div>' +
+        '<p class="muted small answer__extra-foot">Die Antwort vom Chef oben hat Vorrang. Im Zweifel den Meister fragen.</p></article>';
+    }
+    var note = {
+      ki_demo: 'Im Demo-Betrieb ergänzt die KI nur ausgewählte Themen. Im echten Betrieb steht hier ein Hinweis der KI, wenn sie zur Chef-Antwort etwas zu ergänzen hat.',
+      fotos_demo: 'Deine Fotos wertet die KI erst im echten Betrieb aus. Bis dahin gilt die Antwort vom Chef.',
+      tageslimit: 'Die KI pausiert für heute – es gilt die Antwort vom Chef.',
+      ki_fehler: 'Die KI ist gerade nicht erreichbar – es gilt die Antwort vom Chef.'
+    }[r.note];
+    return note ? '<p class="answer-note">' + ICON.spark + '<span>' + esc(note) + '</span></p>' : '';
   }
 
   /* „War das hilfreich?“ – Ja speichert sofort; Nein speichert sofort und bietet ein Hinweisfeld an */
@@ -767,7 +787,8 @@
       var r = await api.ask(q, paths);
       clearTimeout(stepTimer);
       if (r.type === 'entry') {
-        result.innerHTML = entryCard(r.entry, { related: r.related, edit: true, feedback: true });
+        // Chef-Antwort zuerst, die KI ergänzt nur darunter
+        result.innerHTML = entryCard(r.entry, { related: r.related, edit: true, feedback: true, question: q }) + supplementHtml(r, localThumbs);
       } else if (r.type === 'ai') {
         result.innerHTML = '<article class="card answer"><span class="answer__badge answer__badge--ai">' + ICON.spark + (r.demo ? 'Demo-KI-Antwort · vorbereitet, nicht vom Chef geprüft' : 'KI-Antwort · noch nicht vom Chef geprüft') + '</span>' +
           '<p class="answer__q">Deine Frage: <strong>' + esc(q) + '</strong></p>' + localThumbs +
